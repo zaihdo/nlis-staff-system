@@ -283,13 +283,14 @@ h2 {
 }
 
 .weekly-calendar {
-  overflow-x: auto;
+  overflow: hidden;
 }
 
 .weekly-grid {
   display: grid;
-  grid-template-columns: 84px repeat(7, minmax(140px, 1fr));
-  min-width: 1120px;
+  grid-template-columns: 84px repeat(5, minmax(68px, 1fr));
+  width: 100%;
+  min-width: 0;
 }
 
 .time-header,
@@ -320,6 +321,13 @@ h2 {
   letter-spacing: 0.04em;
   text-transform: none;
   padding: 10px 8px;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.weekday-header:hover {
+  background: rgba(0, 122, 255, 0.04);
 }
 
 .weekday-header strong {
@@ -337,15 +345,15 @@ h2 {
 
 .hour-column {
   display: grid;
-  grid-template-rows: repeat(7, minmax(72px, 1fr));
+  grid-template-rows: repeat(12, minmax(28px, 1fr));
 }
 
 .time-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 10px;
-  font-size: 0.7rem;
+  padding: 6px 8px;
+  font-size: 0.68rem;
   font-weight: 700;
   color: #606d7c;
   background: rgba(248, 250, 252, 0.72);
@@ -353,7 +361,7 @@ h2 {
 
 .day-column {
   display: grid;
-  grid-template-rows: repeat(7, minmax(72px, 1fr));
+  grid-template-rows: repeat(12, minmax(28px, 1fr));
   background: rgba(255, 255, 255, 0.9);
 }
 
@@ -433,11 +441,14 @@ h2 {
 
 .modal-card {
   width: min(100%, 800px);
+  max-height: min(88vh, 820px);
   background: rgba(255, 255, 255, 0.96);
   border-radius: 30px;
   padding: 26px 26px 22px;
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
   border: 1px solid rgba(122, 128, 141, 0.12);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-header {
@@ -461,6 +472,33 @@ h2 {
 .time-picker {
   display: grid;
   gap: 10px;
+}
+
+.time-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.time-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ghost-button {
+  border: 1px solid rgba(122, 128, 141, 0.2);
+  background: rgba(248, 250, 252, 0.9);
+  color: #1d1d1f;
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .time-grid {
@@ -506,6 +544,14 @@ h2 {
   gap: 10px;
 }
 
+.slot-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .slot-people {
   display: grid;
   gap: 10px;
@@ -549,6 +595,11 @@ h2 {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 18px;
+  position: sticky;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.96);
+  padding-top: 12px;
+  z-index: 1;
 }
 
 @media (max-width: 900px) {
@@ -573,20 +624,122 @@ h2 {
 
 @media (max-width: 620px) {
   .app-shell {
-    padding-inline: 14px;
+    padding: 16px 12px 28px;
+  }
+
+  .topbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px 14px 12px;
   }
 
   .toolbar {
-    grid-template-columns: 1fr 1fr;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    grid-template-areas:
+      "prev today next"
+      "month month month"
+      "lock lock lock";
+    gap: 8px;
+    width: 100%;
+  }
+
+  .toolbar .nav-button:first-child {
+    grid-area: prev;
+  }
+
+  .toolbar .nav-button:last-child {
+    grid-area: next;
+  }
+
+  .today-button {
+    grid-area: today;
+    justify-self: stretch;
+    width: 100%;
   }
 
   .month-pill {
+    grid-area: month;
     min-width: 0;
     width: 100%;
-    grid-column: 1 / -1;
+  }
+
+  .secondary-button {
+    grid-area: lock;
+    width: 100%;
   }
 
   .time-grid {
     grid-template-columns: 1fr;
+  }
+
+  .weekly-grid {
+    grid-template-columns: 56px repeat(5, minmax(0, 1fr));
+    min-width: 0;
+  }
+
+  .time-header,
+  .weekday-header {
+    min-height: 52px;
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+  }
+
+  .weekday-header {
+    padding: 6px 4px;
+  }
+
+  .weekday-header strong {
+    font-size: 0.8rem;
+  }
+
+  .hour-column,
+  .day-column {
+    grid-template-rows: repeat(12, minmax(24px, 1fr));
+  }
+
+  .time-row {
+    padding: 4px;
+    font-size: 0.5rem;
+    line-height: 1.1;
+  }
+
+  .slot-cell {
+    padding: 3px 4px;
+    min-height: 24px;
+  }
+
+  .name-pill {
+    font-size: 0.38rem;
+    padding: 0.1rem 0.22rem;
+    max-width: 100%;
+  }
+
+  .empty-slot-label {
+    font-size: 0.68rem;
+  }
+
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: 88vh;
+    padding: 18px 14px 14px;
+    border-radius: 20px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .modal-actions .primary-button,
+  .modal-actions .secondary-button {
+    width: 100%;
   }
 }

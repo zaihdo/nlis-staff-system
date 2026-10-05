@@ -25,7 +25,7 @@ create table if not exists public.availability (
   id uuid not null default gen_random_uuid() primary key,
   name text not null,
   date text not null,
-  hour int not null check (hour between 0 and 23),
+  hour int not null check (hour between 0 and 47),
   color text not null default '#4F46E5',
   created_at timestamptz not null default now(),
   unique (name, date, hour)

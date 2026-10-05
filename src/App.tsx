@@ -19,7 +19,7 @@ type UserRecord = {
   color: string
 }
 
-const HOURS = Array.from({ length: 7 }, (_, index) => 8 + index)
+const HALF_HOUR_SLOTS = Array.from({ length: 11 }, (_, index) => 17 + index)
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const PALETTE = [
   '#007AFF',
@@ -64,10 +64,25 @@ const formatDateLabel = (dateString: string) => {
   }).format(date)
 }
 
-const formatHourLabel = (hour: number) => {
+const normalizeSlotValue = (slotValue: number) => {
+  if (slotValue >= 0 && slotValue <= 47) {
+    return slotValue
+  }
+
+  if (slotValue >= 8 && slotValue <= 14) {
+    return slotValue * 2
+  }
+
+  return slotValue
+}
+
+const formatHourLabel = (slot: number) => {
+  const totalMinutes = normalizeSlotValue(slot) * 30
+  const hour = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
   const suffix = hour >= 12 ? 'PM' : 'AM'
   const normalizedHour = hour % 12 || 12
-  return `${normalizedHour}:00 ${suffix}`
+  return `${normalizedHour}:${String(minutes).padStart(2, '0')} ${suffix}`
 }
 
 const getStartOfWeek = (date: Date) => {
@@ -109,6 +124,23 @@ const getColorForName = (name: string) => {
   return PALETTE[total % PALETTE.length]
 }
 
+const getCompactName = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+
+  if (parts.length === 0) {
+    return ''
+  }
+
+  if (parts.length === 1) {
+    return parts[0]
+  }
+
+  const firstInitial = parts[0].charAt(0).toUpperCase()
+  const lastName = parts[parts.length - 1]
+
+  return `${firstInitial}. ${lastName}`
+}
+
 function App() {
   const today = new Date()
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -121,7 +153,8 @@ function App() {
   const [adminLoading, setAdminLoading] = useState(false)
   const [weekStart, setWeekStart] = useState(getStartOfWeek(today))
   const [selectedDate, setSelectedDate] = useState<string | null>(toISODate(today))
-  const [selectedHour, setSelectedHour] = useState<number>(8)
+  const [selectedHour, setSelectedHour] = useState<number | null>(null)
+  const [selectedSlots, setSelectedSlots] = useState<number[]>([])
   const [status, setStatus] = useState('Choose a date and add a time slot to mark your availability.')
   const [availability, setAvailability] = useState<AvailabilityItem[]>([])
   const [users, setUsers] = useState<UserRecord[]>(DEFAULT_USERS)
@@ -131,7 +164,7 @@ function App() {
 
   const requiredPassword = import.meta.env.VITE_POLL_PASSWORD ?? 'staff-pass'
   const hasAdminAuth = Boolean(import.meta.env.VITE_SUPABASE_AUTH_EMAIL && import.meta.env.VITE_SUPABASE_AUTH_PASSWORD)
-  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart])
+  const weekDays = useMemo(() => Array.from({ length: 5 }, (_, index) => addDays(weekStart, index)), [weekStart])
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null
 
   const availabilityByDate = useMemo(() => {
@@ -156,16 +189,18 @@ function App() {
     const items = availabilityByDate[selectedDate] ?? []
 
     items.forEach((item) => {
-      if (!grouped[item.hour]) {
-        grouped[item.hour] = []
+      const slotValue = normalizeSlotValue(item.hour)
+
+      if (!grouped[slotValue]) {
+        grouped[slotValue] = []
       }
-      grouped[item.hour].push(item)
+      grouped[slotValue].push(item)
     })
 
     return grouped
   }, [availabilityByDate, selectedDate])
 
-  const selectedHourEntries = selectedDateEntriesByHour[selectedHour] ?? []
+  const selectedHourEntries = selectedHour === null ? [] : (selectedDateEntriesByHour[selectedHour] ?? [])
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -308,15 +343,35 @@ function App() {
     setAvailability(data ?? [])
   }
 
-  const handleDayClick = (date: Date, hour = 8) => {
+  const toggleSelectedSlot = (slot: number) => {
+    setSelectedSlots((current) => {
+      if (current.includes(slot)) {
+        return current.filter((currentSlot) => currentSlot !== slot)
+      }
+
+      return [...current, slot].sort((left, right) => left - right)
+    })
+    setSelectedHour(slot)
+  }
+
+  const handleDayClick = (date: Date) => {
     const isoDate = toISODate(date)
     setSelectedDate(isoDate)
-    setSelectedHour(hour)
+    setSelectedHour(null)
+    setSelectedSlots([])
     setModalOpen(true)
   }
 
+  const handleDayHeaderClick = (date: Date) => {
+    const isoDate = toISODate(date)
+    setSelectedDate(isoDate)
+    setSelectedHour((current) => current ?? null)
+    setSelectedSlots([])
+  }
+
   const handleSaveAvailability = async () => {
-    if (!selectedDate) {
+    if (!selectedDate || selectedHour === null) {
+      setStatus('Select a time before saving your availability.')
       return
     }
 
@@ -329,6 +384,11 @@ function App() {
     const trimmedName = `${activeUser.first_name} ${activeUser.last_name}`.trim()
     if (!trimmedName) {
       setStatus('Add a name before saving availability.')
+      return
+    }
+
+    if (!selectedSlots.length) {
+      setStatus('Select at least one half-hour slot before saving.')
       return
     }
 
@@ -345,21 +405,24 @@ function App() {
     const color = activeUser.color || getColorForName(trimmedName)
 
     try {
-      const { error } = await supabase.from('availability').upsert(
-        {
-          name: trimmedName,
-          date: selectedDate,
-          hour: selectedHour,
-          color,
-        },
-        { onConflict: 'name,date,hour' },
-      )
+      const payload = selectedSlots.map((slot) => ({
+        name: trimmedName,
+        date: selectedDate,
+        hour: slot,
+        color,
+      }))
+
+      const { error } = await supabase.from('availability').upsert(payload, { onConflict: 'name,date,hour' })
 
       if (error) {
         throw error
       }
 
-      setStatus(`Saved ${trimmedName} for ${formatDateLabel(selectedDate)} at ${formatHourLabel(selectedHour)}.`)
+      const savedSlotsText = selectedSlots
+        .map((slot) => formatHourLabel(slot))
+        .join(', ')
+
+      setStatus(`Saved ${trimmedName} for ${formatDateLabel(selectedDate)} at ${savedSlotsText}.`)
       setModalOpen(false)
       await refreshAvailability()
     } catch (error) {
@@ -394,6 +457,33 @@ function App() {
     } catch (error) {
       console.error(error)
       setStatus('The availability could not be removed.')
+    }
+  }
+
+  const handleDeleteCurrentUserSlot = async () => {
+    if (!selectedDate || !selectedUser || !supabase || selectedHour === null) {
+      return
+    }
+
+    const currentName = `${selectedUser.first_name} ${selectedUser.last_name}`.trim()
+
+    try {
+      const { error } = await supabase
+        .from('availability')
+        .delete()
+        .eq('name', currentName)
+        .eq('date', selectedDate)
+        .eq('hour', selectedHour)
+
+      if (error) {
+        throw error
+      }
+
+      await refreshAvailability()
+      setStatus(`Removed ${currentName} from ${formatDateLabel(selectedDate)} at ${formatHourLabel(selectedHour)}.`)
+    } catch (error) {
+      console.error(error)
+      setStatus('Your saved time could not be removed.')
     }
   }
 
@@ -539,17 +629,23 @@ function App() {
             const isActive = selectedDate === isoDate
 
             return (
-              <div key={isoDate} className={`weekday-header ${isToday ? 'today' : ''} ${isActive ? 'active' : ''}`}>
+              <button
+                key={isoDate}
+                type="button"
+                className={`weekday-header ${isToday ? 'today' : ''} ${isActive ? 'active' : ''}`}
+                onClick={() => handleDayHeaderClick(day)}
+                aria-label={`Select ${formatDateLabel(isoDate)}`}
+              >
                 <span>{DAY_NAMES[day.getDay()]}</span>
                 <strong>{day.getDate()}</strong>
-              </div>
+              </button>
             )
           })}
 
           <div className="hour-column">
-            {HOURS.map((hour) => (
-              <div key={`time-${hour}`} className="time-row">
-                {formatHourLabel(hour)}
+            {HALF_HOUR_SLOTS.map((slot) => (
+              <div key={`time-${slot}`} className="time-row">
+                {formatHourLabel(slot)}
               </div>
             ))}
           </div>
@@ -560,26 +656,26 @@ function App() {
 
             return (
               <div key={`${isoDate}-column`} className={`day-column ${selectedDate === isoDate ? 'selected-day' : ''}`}>
-                {HOURS.map((hour) => {
-                  const hourEntries = entries.filter((entry) => entry.hour === hour)
-                  const isSelected = selectedDate === isoDate && selectedHour === hour
+                {HALF_HOUR_SLOTS.map((slot) => {
+                  const slotEntries = entries.filter((entry) => normalizeSlotValue(entry.hour) === slot)
+                  const isSelected = selectedDate === isoDate && selectedHour === slot
 
                   return (
                     <button
-                      key={`${isoDate}-${hour}`}
+                      key={`${isoDate}-${slot}`}
                       type="button"
                       className={`slot-cell ${isSelected ? 'selected' : ''}`}
-                      onClick={() => handleDayClick(day, hour)}
+                      onClick={() => handleDayClick(day)}
                     >
-                      {hourEntries.length > 0 ? (
+                      {slotEntries.length > 0 ? (
                         <div className="slot-badges">
-                          {hourEntries.map((entry) => (
+                          {slotEntries.map((entry) => (
                             <span
-                              key={`${entry.id}-${hour}`}
+                              key={`${entry.id}-${slot}`}
                               className="name-pill"
                               style={{ background: `${entry.color}22`, color: entry.color, borderColor: `${entry.color}66` }}
                             >
-                              {entry.name}
+                              {getCompactName(entry.name)}
                             </span>
                           ))}
                         </div>
@@ -625,20 +721,30 @@ function App() {
               </label>
 
               <div className="time-picker">
-                <span>Choose a time</span>
+                <div className="time-picker-header">
+                  <span>Choose a time</span>
+                  <div className="time-picker-actions">
+                    <button type="button" className="ghost-button" onClick={() => setSelectedSlots(HALF_HOUR_SLOTS)}>
+                      Select all
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => setSelectedSlots([])}>
+                      Clear
+                    </button>
+                  </div>
+                </div>
                 <div className="time-grid">
-                  {HOURS.map((hour) => {
-                    const isSelected = selectedHour === hour
-                    const hourMatches = selectedDateEntriesByHour[hour] ?? []
+                  {HALF_HOUR_SLOTS.map((slot) => {
+                    const isSelected = selectedSlots.includes(slot)
+                    const hourMatches = selectedDateEntriesByHour[slot] ?? []
 
                     return (
                       <button
-                        key={hour}
+                        key={slot}
                         type="button"
                         className={`time-button ${isSelected ? 'selected' : ''}`}
-                        onClick={() => setSelectedHour(hour)}
+                        onClick={() => toggleSelectedSlot(slot)}
                       >
-                        <span>{formatHourLabel(hour)}</span>
+                        <span>{formatHourLabel(slot)}</span>
                         {hourMatches.length > 0 ? <small>{hourMatches.length}</small> : null}
                       </button>
                     )
@@ -647,13 +753,20 @@ function App() {
               </div>
 
               <div className="slot-summary">
-                <span>Staff scheduled for this time</span>
+                <div className="slot-summary-header">
+                  <span>Staff scheduled for this time</span>
+                  {selectedHourEntries.some((entry) => entry.name === `${selectedUser?.first_name ?? ''} ${selectedUser?.last_name ?? ''}`.trim()) ? (
+                    <button type="button" className="ghost-button" onClick={handleDeleteCurrentUserSlot}>
+                      Delete my time
+                    </button>
+                  ) : null}
+                </div>
                 <div className="slot-people">
                   {selectedHourEntries.length > 0 ? (
                     selectedHourEntries.map((entry) => (
                       <div key={entry.id} className="slot-person">
                         <span className="slot-color" style={{ background: entry.color }} />
-                        <span>{entry.name}</span>
+                        <span>{getCompactName(entry.name)}</span>
                         <button type="button" className="remove-person" onClick={() => handleDeleteAvailability(entry)}>
                           Remove
                         </button>
