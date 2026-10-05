@@ -373,8 +373,8 @@ function App() {
   }
 
   const handleSaveAvailability = async () => {
-    if (!selectedDate || selectedHour === null) {
-      setStatus('Select a time before saving your availability.')
+    if (!selectedDate) {
+      setStatus('Select a date before saving your availability.')
       return
     }
 
@@ -393,6 +393,11 @@ function App() {
     if (!selectedSlots.length) {
       setStatus('Select at least one half-hour slot before saving.')
       return
+    }
+
+    const activeHour = selectedHour ?? selectedSlots[selectedSlots.length - 1] ?? null
+    if (activeHour !== null) {
+      setSelectedHour(activeHour)
     }
 
     if (!hasSupabaseConfig) {
