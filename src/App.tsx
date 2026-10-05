@@ -201,6 +201,9 @@ function App() {
   }, [availabilityByDate, selectedDate])
 
   const selectedHourEntries = selectedHour === null ? [] : (selectedDateEntriesByHour[selectedHour] ?? [])
+  const selectedUserEntriesForDate = selectedDate
+    ? availability.filter((item) => item.date === selectedDate && `${selectedUser?.first_name ?? ''} ${selectedUser?.last_name ?? ''}`.trim() === item.name)
+    : []
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -487,6 +490,30 @@ function App() {
     }
   }
 
+  const handleDeleteCurrentUserDate = async () => {
+    if (!selectedDate || !selectedUser || !supabase) {
+      return
+    }
+
+    const currentName = `${selectedUser.first_name} ${selectedUser.last_name}`.trim()
+
+    try {
+      const { error } = await supabase.from('availability').delete().eq('name', currentName).eq('date', selectedDate)
+
+      if (error) {
+        throw error
+      }
+
+      setSelectedHour(null)
+      setSelectedSlots([])
+      await refreshAvailability()
+      setStatus(`Removed all of ${currentName}'s availability for ${formatDateLabel(selectedDate)}.`)
+    } catch (error) {
+      console.error(error)
+      setStatus('Your saved availability for this day could not be removed.')
+    }
+  }
+
   if (!isUnlocked) {
     return (
       <main className="auth-screen">
@@ -755,11 +782,18 @@ function App() {
               <div className="slot-summary">
                 <div className="slot-summary-header">
                   <span>Staff scheduled for this time</span>
-                  {selectedHourEntries.some((entry) => entry.name === `${selectedUser?.first_name ?? ''} ${selectedUser?.last_name ?? ''}`.trim()) ? (
-                    <button type="button" className="ghost-button" onClick={handleDeleteCurrentUserSlot}>
-                      Delete my time
-                    </button>
-                  ) : null}
+                  <div className="time-picker-actions">
+                    {selectedHourEntries.some((entry) => entry.name === `${selectedUser?.first_name ?? ''} ${selectedUser?.last_name ?? ''}`.trim()) ? (
+                      <button type="button" className="ghost-button" onClick={handleDeleteCurrentUserSlot}>
+                        Delete my time
+                      </button>
+                    ) : null}
+                    {selectedUserEntriesForDate.length > 0 ? (
+                      <button type="button" className="ghost-button" onClick={handleDeleteCurrentUserDate}>
+                        Delete my day
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="slot-people">
                   {selectedHourEntries.length > 0 ? (
