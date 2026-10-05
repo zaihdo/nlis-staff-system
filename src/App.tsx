@@ -415,10 +415,20 @@ function App() {
         color,
       }))
 
-      const { error } = await supabase.from('availability').upsert(payload, { onConflict: 'name,date,hour' })
+      const { error: deleteError } = await supabase
+        .from('availability')
+        .delete()
+        .eq('name', trimmedName)
+        .eq('date', selectedDate)
 
-      if (error) {
-        throw error
+      if (deleteError) {
+        throw deleteError
+      }
+
+      const { error: insertError } = await supabase.from('availability').insert(payload)
+
+      if (insertError) {
+        throw insertError
       }
 
       const savedSlotsText = selectedSlots
@@ -429,7 +439,7 @@ function App() {
       setModalOpen(false)
       await refreshAvailability()
     } catch (error) {
-      console.error(error)
+      console.error('Availability save failed:', error)
 
       const message = error instanceof Error ? error.message : String(error ?? '')
       const isMissingTable =
@@ -438,7 +448,7 @@ function App() {
       setStatus(
         isMissingTable
           ? 'The Supabase table is missing in this environment. Run the SQL in supabase/schema.sql in your dev project first.'
-          : 'The change could not be saved. Please review the Supabase setup and try again.',
+          : `The change could not be saved. Supabase error: ${message || 'Please review the Supabase setup and try again.'}`,
       )
     }
   }
