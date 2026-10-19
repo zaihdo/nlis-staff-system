@@ -25,3 +25,12 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+.gstack/
+
+.env
+
+/.env
+
+.env.local
+
+/.env.local

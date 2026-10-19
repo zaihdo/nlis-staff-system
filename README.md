@@ -48,3 +48,10 @@ A polished monthly availability calendar for staff scheduling. Staff can move mo
 ## Notes
 
 This prototype uses the public Supabase anon key for a no-account staff poll. For stricter production controls, add server-side auth and tighter row-level security rules.
+
+
+## Issues
+
+- Password leaking in devtools lol, needs fix if this goes public or somewhere else. 
+
+- Needs Auth based/protected routing
